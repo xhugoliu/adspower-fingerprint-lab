@@ -3,6 +3,11 @@
 const inWorker = typeof document === 'undefined';
 const parameters = new URL(location.href).searchParams;
 const followup = parameters.get('followup') === '1';
+const webglScenes = parameters.get('webgl_scenes') === '1';
+const contextTimeout = webglScenes ? 30000 : 15000;
+const contextQuery = new URLSearchParams({
+    drawing: parameters.get('drawing'), followup: Number(followup), webgl_scenes: Number(webglScenes),
+});
 
 if (inWorker && followup) importScripts('/font-followup.js', '/graphics-followup.js');
 
@@ -277,7 +282,7 @@ async function collectContext() {
         const [browser, http, fonts, graphics] = await Promise.all([
             readSafely(readBrowser), readSafely(() => fetchJson('/headers')),
             readSafely(async () => globalThis.fontFollowup(await fetchJson('/fonts'))),
-            readSafely(() => globalThis.graphicsFollowup()),
+            readSafely(() => globalThis.graphicsFollowup({extended: webglScenes})),
         ]);
         delete http.testCookiePresent;
         const readings = {browser, http, fonts, graphics};
@@ -301,13 +306,13 @@ async function collectContext() {
 
 function collectWorker() {
     return new Promise(resolve => {
-        const worker = new Worker(`/probe.js?drawing=${parameters.get('drawing')}&followup=${Number(followup)}`);
+        const worker = new Worker(`/probe.js?${contextQuery}`);
         function finish(value) {
             clearTimeout(deadline);
             worker.terminate();
             resolve(value);
         }
-        const deadline = setTimeout(() => finish({error: 'WorkerTimeout'}), 15000);
+        const deadline = setTimeout(() => finish({error: 'WorkerTimeout'}), contextTimeout);
         worker.onmessage = event => finish(event.data);
         worker.onerror = () => finish({error: 'WorkerError'});
     });
@@ -328,7 +333,7 @@ function collectFrame(url) {
         function handleMessage(event) {
             if (event.source === frame.contentWindow && event.origin === url.origin) finish(event.data);
         }
-        const deadline = setTimeout(() => finish({error: 'FrameTimeout'}), 15000);
+        const deadline = setTimeout(() => finish({error: 'FrameTimeout'}), contextTimeout);
         window.addEventListener('message', handleMessage);
         frame.src = url.href;
         document.body.appendChild(frame);
@@ -374,7 +379,7 @@ async function main() {
             || !['clear', 'shader'].includes(drawing)) {
         throw new Error('无效的采样参数，请从实验设置开始');
     }
-    const framePath = `/frame?drawing=${drawing}&followup=${Number(followup)}`;
+    const framePath = `/frame?${contextQuery}`;
     const [top, sameFrame, crossFrame, worker, geolocation, rtc, storage] = await Promise.all([
         readSafely(collectContext),
         readSafely(() => collectFrame(new URL(framePath, location.origin))),

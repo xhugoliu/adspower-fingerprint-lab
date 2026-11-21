@@ -6,21 +6,24 @@
 
 [复测记录 · 2026-11-21](experiments/2026-11-21.md)
 
-[配置能力边界复测 · 2026-11-21](experiments/2026-11-21-limits.md)
+[指纹配置组合复测 · 2026-11-21](experiments/2026-11-21-limits.md)
 
 [多 Profile 对照 · 2026-11-21](experiments/2026-11-21-multiprofile.md)
 
+[WebGL 多图案与透明度复测 · 2026-11-21](experiments/2026-11-21-webgl-alpha.md)
+
 ## 阶段发现
+
+下表按实测影响面从大到小排列，参考触发设置、受影响的读取路径和复现范围。
 
 | 项目 | 当前观测 |
 | --- | --- |
-| 分辨率 | 在 DPR 为 2 的 Mac 上，自定义 `1440 × 900` 或 `1920 × 1080` 时，`screen` 返回一半宽高，`matchMedia()` 和实际生效的 CSS `@media` 返回配置尺寸。 |
-| WebGL | 开启 WebGL 图像噪声后，着色器场景的 `readPixels()` 数组结果稳定改变一个像素。逐像素核对确认 PNG、Canvas 2D 复制和 WebGL 2 像素缓冲区均保留预期值。 |
-| 字体 | 自定义列表移除 PingFang SC 后，普通布局和 Canvas 度量回退，`FontFace local()` 仍能加载。 |
+| WebGL | SunBrowser 157 开启图像噪声后，所测着色器和纹理图案的 `readPixels()` 数组回读值有一个像素与 Real 基线不同。`alpha:false` 的图案中，PNG 解码像素与基线一致。半透明对照中，窗口侧 `toDataURL()` 解码后每次有 14 个像素与基线不同，Worker `convertToBlob()` 解码后仍与基线一致。 |
+| 分辨率 | 在 DPR 为 2 的 Mac 桌面配置中，自定义 `1440 × 900` 或 `1920 × 1080` 时，`screen` 返回一半宽高，`matchMedia()` 和实际生效的 CSS `@media` 返回配置尺寸。实测的 Android 预设中，几种宽高读数均一致。 |
+| 字体 | 自定义列表移除 PingFang SC 后，普通布局和 Canvas 文本度量回退，已知 PostScript 名称 `local('PingFangSC-Regular')` 仍可加载并渲染。 |
 | 定位 | 选择「阻止」后，定位请求被拒绝，Permissions API 仍报 `prompt`。 |
-| 单项变化与访客 ID | 只改时区就改变了 FingerprintJS 演示页的访客 ID。42 个采集字段中有 41 个保持原值。 |
 
-各项发现的浏览器版本、配置、样本数和有效范围见实验记录。
+各项发现适用于实验记录所列的设备、内核、配置和输入。样本单位为页面、执行上下文或回读次数，见各组记录。跨设备的区分能力与线上站点的实际采用比例需独立测量。
 
 ## 复测工具
 

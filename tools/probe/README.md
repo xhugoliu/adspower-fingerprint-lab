@@ -26,9 +26,13 @@ WebRTC 使用未配置 STUN 的本地连接，保存候选类别。定位默认�
 
 - 屏幕宽高分别从 `screen`、`Screen.prototype` getter、`matchMedia()` 和实际应用的 CSS `@media` 规则读取。对照保留 DPR、视口宽高和页面缩放。
 - 字体分别通过 DOM 文本尺寸、Canvas `measureText()` 和 `FontFace local()` 探测，并附上 Arial 和不存在字体的对照。`localRender` 将字体族名称和 PostScript 名称分开测试。加载成功后把字体注册到 `FontFaceSet`，保存 Canvas 度量以对比同机基线。`null` 表示该路径在当前上下文不可测。
-- WebGL 比较普通 `readPixels()`、同一路径的重复读取、向 Canvas 2D 复制、解码后的 PNG 以及 WebGL 2 像素缓冲区。每种结果都与预期 RGBA 逐像素比较，统一到相同的行顺序。
+- WebGL 比较写入 `Uint8Array` 的 `readPixels()`、重复直读、Canvas 2D 复制、PNG 解码和 WebGL 2 像素缓冲区回读。缓冲区路径用 `readPixels()` 的偏移量形式配合 `getBufferSubData()`。各路径的 RGBA 均统一到以图像左上角为原点的行顺序。
 
 每组用新的标签。每次重开后采三页，并保持 Chrome 对照窗口和 AdsPower 的页面缩放为 100%。复测屏幕时，仅改变分辨率。复测 WebGL 时，仅开启 WebGL 图像噪声，并把 Canvas 保持在 Real。复测字体时，记录候选集中实际从列表移除的字体。
+
+勾选「追加 WebGL 尺寸、纹理和透明度场景」会同时开启复测模式。新增场景保存在各上下文的 `graphics.scenes`，包括不同尺寸和画法、纹理绘制以及 `alpha:true` 的半透明对照。
+
+`againstExpected` 将每条路径的 RGBA 与程序生成的预期值逐像素比较。`againstReadPixels` 以同一场景第一次数组直读为参照。PNG 路径的 `sha256` 对解码后的 RGBA 计算。扩展模式还记录左下角单个像素的 `samplePixel`，方便核对颜色和透明度。
 
 ## 对比
 
@@ -36,4 +40,4 @@ WebRTC 使用未配置 STUN 的本地连接，保存候选类别。定位默认�
 python3 tools/probe/compare.py /tmp/adspower-probe.jsonl baseline custom-resolution --field top.screen
 ```
 
-省略 `--field` 会检查全部字段，也可以重复指定多个字段前缀。脚本按实验标签、批次和样本序号取第一条记录，并报告两组之间的变化和组内波动。输出文件由 `--output` 指定，复测日志可按需要单独留存。
+省略 `--field` 会检查全部字段，也可以重复指定多个字段前缀。对比脚本按实验标签、批次和样本序号取第一条记录，并报告两组之间的变化和组内波动。采集文件由 `serve.py --output` 指定。

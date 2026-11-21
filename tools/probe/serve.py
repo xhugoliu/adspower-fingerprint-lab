@@ -32,6 +32,7 @@ FORM = r"""
     <p><label><input type="checkbox" name="locate" value="1"> 发送定位请求</label></p>
     <p><label><input type="checkbox" name="storage" value="1"> 写入并读取本机测试存储</label></p>
     <p><label><input type="checkbox" name="followup" value="1"> 复测屏幕、字体及 WebGL 读取路径</label></p>
+    <p><label><input type="checkbox" name="webgl_scenes" value="1"> 追加 WebGL 尺寸、纹理和透明度场景</label></p>
     <button>开始采样</button>
 </form>
 <p><a href="/cleanup">清除本机测试存储</a></p>
@@ -143,10 +144,12 @@ class Handler(BaseHTTPRequestHandler):
         if drawing not in ("shader", "clear"):
             self.json_reply({"error": "Unknown WebGL drawing mode"}, 400)
             return
+        webgl_scenes = get("webgl_scenes") == "1"
         settings = {
             "run": run, "count": int(count), "drawing": drawing,
             "locate": get("locate") == "1", "storage": get("storage") == "1",
-            "followup": get("followup") == "1",
+            "followup": get("followup") == "1" or webgl_scenes,
+            "webgl_scenes": webgl_scenes,
         }
         batch = secrets.token_hex(8)
         with self.server.lock:
@@ -154,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
         query = urlencode({
             "batch": batch, "index": 1, "run": run, "count": count, "drawing": drawing,
             "locate": int(settings["locate"]), "storage": int(settings["storage"]),
-            "followup": int(settings["followup"]),
+            "followup": int(settings["followup"]), "webgl_scenes": int(webgl_scenes),
         })
         self.reply(303, "text/plain", b"", location=f"/sample?{query}")
 

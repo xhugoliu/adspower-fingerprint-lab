@@ -49,8 +49,9 @@ def summarize(rows):
     samples = []
     for row in rows:
         settings = {key: row[key] for key in ("drawing", "locate", "storage")}
-        if row.get("followup"):
-            settings["followup"] = True
+        for key in ("followup", "webgl_scenes"):
+            if row.get(key):
+                settings[key] = True
         record = {"settings": settings, **row["readings"]}
         samples.append(dict(flatten(record)))
     fields = set().union(*(sample.keys() for sample in samples))
