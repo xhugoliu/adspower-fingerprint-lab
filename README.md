@@ -8,6 +8,8 @@
 
 [配置能力边界复测 · 2026-11-21](experiments/2026-11-21-limits.md)
 
+[多 Profile 对照 · 2026-11-21](experiments/2026-11-21-multiprofile.md)
+
 ## 阶段发现
 
 | 项目 | 当前观测 |
