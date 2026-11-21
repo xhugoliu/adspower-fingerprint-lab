@@ -17,6 +17,13 @@
         ['PingFang TC', 'PingFangTC-Regular'],
         ['Times New Roman', 'TimesNewRomanPSMT'],
     ]);
+    const renderSamples = ['WWW ii M 0123456789', '國体廣學语漢字繁體翁永'];
+    const renderTargets = [
+        ['PingFang SC', 'PingFang SC', faceNames.get('PingFang SC')],
+        ['STHeiti', 'STHeiti', 'STHeitiSC-Light'],
+        ['Arial', 'Arial', faceNames.get('Arial')],
+        ['missing', missingName, null],
+    ];
 
     function quoteFamily(family) {
         return '"' + family.replace(/["\\\u0000-\u001f\u007f]/g,
@@ -53,9 +60,9 @@
         else if (typeof OffscreenCanvas === 'function') canvas = new OffscreenCanvas(1, 1);
         const context = canvas?.getContext('2d');
         if (!context) return null;
-        return family => {
+        return (family, samples = textSamples) => {
             context.font = '57px ' + family;
-            return textSamples.flatMap(text => {
+            return samples.flatMap(text => {
                 const metrics = context.measureText(text);
                 return [metrics.width, metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxRight,
                     metrics.actualBoundingBoxAscent, metrics.actualBoundingBoxDescent];
@@ -65,7 +72,7 @@
 
     function detector(measure) {
         if (!measure) return null;
-        const baselines = generics.map(measure);
+        const baselines = generics.map(generic => measure(generic));
         if (!baselines.some(values => values.some(Number.isFinite))
                 || baselines.every(values => values.every(value => !value))) return null;
         return {
@@ -92,11 +99,47 @@
         }
     }
 
+    async function inspectLocalFace(name, alias, fontSet, measure, baseline) {
+        if (!name || typeof FontFace !== 'function') return null;
+        let face;
+        try {
+            face = await new FontFace(alias, `local(${quoteFamily(name)})`).load();
+        } catch (error) {
+            if (error.name === 'NetworkError') return {name, loaded: false, rendered: null, metrics: null};
+            return {name, error: error.name};
+        }
+        if (!fontSet || !measure) return {name, loaded: true, rendered: null, metrics: null};
+
+        fontSet.add(face);
+        try {
+            const metrics = generics.map(fallback => measure(`${quoteFamily(alias)}, ${fallback}`, renderSamples));
+            const rendered = metrics.some((values, index) =>
+                values.some((value, offset) => value !== baseline[index][offset]));
+            return {name, loaded: true, rendered, metrics};
+        } finally {
+            fontSet.delete(face);
+        }
+    }
+
+    async function readLocalRender(measure) {
+        const fontSet = globalThis.document?.fonts ?? globalThis.fonts;
+        const baseline = measure ? generics.map(fallback => measure(fallback, renderSamples)) : null;
+        const targets = await Promise.all(renderTargets.map(async ([key, familyName, postscriptName], index) => {
+            const [family, postscript] = await Promise.all([
+                inspectLocalFace(familyName, `LocalRenderFamily${index}`, fontSet, measure, baseline),
+                inspectLocalFace(postscriptName, `LocalRenderPostscript${index}`, fontSet, measure, baseline),
+            ]);
+            return [key, {family, postscript}];
+        }));
+        return Object.fromEntries(targets);
+    }
+
     globalThis.fontFollowup = async function fontFollowup(families) {
         const layout = layoutProbe();
         try {
             const dom = detector(layout?.measure);
-            const canvas = detector(canvasProbe());
+            const measureCanvas = canvasProbe();
+            const canvas = detector(measureCanvas);
             const makeReading = async family => ({
                 dom: dom?.has(family) ?? null,
                 canvas: canvas?.has(family) ?? null,
@@ -104,9 +147,10 @@
             });
             const names = [...new Set(families.filter(family =>
                 !generics.includes(family.toLowerCase()) && family !== missingName))];
-            const [missing, arial, fonts] = await Promise.all([
+            const [missing, arial, fonts, localRender] = await Promise.all([
                 makeReading(missingName), makeReading('Arial'),
                 Promise.all(names.map(async family => [family, await makeReading(family)])),
+                readLocalRender(measureCanvas),
             ]);
             return {
                 available: {dom: Boolean(dom), canvas: Boolean(canvas), local: typeof FontFace === 'function'},
@@ -119,6 +163,7 @@
                     },
                 },
                 fonts: Object.fromEntries(fonts),
+                localRender,
             };
         } finally {
             layout?.close();

@@ -25,7 +25,7 @@ WebRTC 使用未配置 STUN 的本地连接，保存候选类别。定位默认�
 勾选「复测屏幕、字体及 WebGL 读取路径」。这项模式会同时采集分段清屏和着色器场景，保存以下读数。
 
 - 屏幕宽高分别从 `screen`、`Screen.prototype` getter、`matchMedia()` 和实际应用的 CSS `@media` 规则读取。对照保留 DPR、视口宽高和页面缩放。
-- 字体分别通过 DOM 文本尺寸、Canvas `measureText()` 和 `FontFace local()` 探测，并附上 Arial 和不存在字体的对照。`null` 表示该路径在当前上下文不可测。
+- 字体分别通过 DOM 文本尺寸、Canvas `measureText()` 和 `FontFace local()` 探测，并附上 Arial 和不存在字体的对照。`localRender` 将字体族名称和 PostScript 名称分开测试。加载成功后把字体注册到 `FontFaceSet`，保存 Canvas 度量以对比同机基线。`null` 表示该路径在当前上下文不可测。
 - WebGL 比较普通 `readPixels()`、同一路径的重复读取、向 Canvas 2D 复制、解码后的 PNG 以及 WebGL 2 像素缓冲区。每种结果都与预期 RGBA 逐像素比较，统一到相同的行顺序。
 
 每组用新的标签。每次重开后采三页，并保持 Chrome 对照窗口和 AdsPower 的页面缩放为 100%。复测屏幕时，仅改变分辨率。复测 WebGL 时，仅开启 WebGL 图像噪声，并把 Canvas 保持在 Real。复测字体时，记录候选集中实际从列表移除的字体。
