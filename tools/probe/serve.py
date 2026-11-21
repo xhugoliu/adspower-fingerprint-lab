@@ -10,6 +10,7 @@ from threading import Lock
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 DIRECTORY = Path(__file__).resolve().parent
+FOLLOWUP_SCRIPTS = ("screen-followup.js", "font-followup.js", "graphics-followup.js")
 HEADERS = (
     "User-Agent", "Accept-Language", "Sec-CH-UA", "Sec-CH-UA-Mobile",
     "Sec-CH-UA-Platform", "Sec-CH-UA-Full-Version-List",
@@ -30,6 +31,7 @@ FORM = r"""
     </label></p>
     <p><label><input type="checkbox" name="locate" value="1"> 发送定位请求</label></p>
     <p><label><input type="checkbox" name="storage" value="1"> 写入并读取本机测试存储</label></p>
+    <p><label><input type="checkbox" name="followup" value="1"> 复测屏幕、字体及 WebGL 读取路径</label></p>
     <button>开始采样</button>
 </form>
 <p><a href="/cleanup">清除本机测试存储</a></p>
@@ -41,7 +43,8 @@ class ProbeServer(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", port), Handler)
         self.output = output
         self.fonts = fonts
-        self.script = (DIRECTORY / "probe.js").read_bytes()
+        self.scripts = {f"/{name}": (DIRECTORY / name).read_bytes()
+                        for name in ("probe.js", *FOLLOWUP_SCRIPTS)}
         self.token = secrets.token_hex(16)
         self.cookie = f"adspower_probe_{self.token}"
         self.primary = f"127.0.0.1:{self.server_port}"
@@ -77,7 +80,8 @@ class Handler(BaseHTTPRequestHandler):
     def json_reply(self, payload, code=200):
         self.reply(code, "application/json", json.dumps(payload, ensure_ascii=False).encode())
 
-    def page(self, content, *, script=False, frame=False):
+    def page(self, content, *, script=False, frame=False, followup=False):
+        scripts = (*FOLLOWUP_SCRIPTS, "probe.js") if followup else ("probe.js",)
         document = (
             '<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -86,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
             '<body>'
             + ('' if frame else '<h1>AdsPower 本机指纹实验</h1>')
             + content
-            + ('<script defer src="/probe.js"></script>' if script else '')
+            + (''.join(f'<script defer src="/{name}"></script>' for name in scripts) if script else '')
             + '</body></html>'
         )
         self.reply(200, "text/html; charset=utf-8", document.encode())
@@ -104,13 +108,16 @@ class Handler(BaseHTTPRequestHandler):
         elif url.path == "/start":
             self.start_batch(parse_qs(url.query))
         elif url.path == "/sample":
-            self.page('<p id="status" role="status">正在采样…</p><p><a href="/">返回实验设置</a></p>', script=True)
+            followup = parse_qs(url.query).get("followup") == ["1"]
+            self.page('<p id="status" role="status">正在采样…</p><p><a href="/">返回实验设置</a></p>',
+                      script=True, followup=followup)
         elif url.path == "/frame":
-            self.page("", script=True, frame=True)
+            followup = parse_qs(url.query).get("followup") == ["1"]
+            self.page("", script=True, frame=True, followup=followup)
         elif url.path == "/cleanup":
             self.page('<p id="status" role="status"></p><p><a href="/">返回实验设置</a></p>', script=True)
-        elif url.path == "/probe.js":
-            self.reply(200, "text/javascript; charset=utf-8", self.server.script)
+        elif url.path in self.server.scripts:
+            self.reply(200, "text/javascript; charset=utf-8", self.server.scripts[url.path])
         elif url.path == "/fonts":
             self.json_reply(self.server.fonts)
         elif url.path == "/headers":
@@ -139,6 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         settings = {
             "run": run, "count": int(count), "drawing": drawing,
             "locate": get("locate") == "1", "storage": get("storage") == "1",
+            "followup": get("followup") == "1",
         }
         batch = secrets.token_hex(8)
         with self.server.lock:
@@ -146,6 +154,7 @@ class Handler(BaseHTTPRequestHandler):
         query = urlencode({
             "batch": batch, "index": 1, "run": run, "count": count, "drawing": drawing,
             "locate": int(settings["locate"]), "storage": int(settings["storage"]),
+            "followup": int(settings["followup"]),
         })
         self.reply(303, "text/plain", b"", location=f"/sample?{query}")
 

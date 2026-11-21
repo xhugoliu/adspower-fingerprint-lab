@@ -48,7 +48,10 @@ def flatten(value, path=""):
 def summarize(rows):
     samples = []
     for row in rows:
-        record = {"settings": {key: row[key] for key in ("drawing", "locate", "storage")}, **row["readings"]}
+        settings = {key: row[key] for key in ("drawing", "locate", "storage")}
+        if row.get("followup"):
+            settings["followup"] = True
+        record = {"settings": settings, **row["readings"]}
         samples.append(dict(flatten(record)))
     fields = set().union(*(sample.keys() for sample in samples))
     return {

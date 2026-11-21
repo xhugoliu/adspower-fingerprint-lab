@@ -2,6 +2,9 @@
 
 const inWorker = typeof document === 'undefined';
 const parameters = new URL(location.href).searchParams;
+const followup = parameters.get('followup') === '1';
+
+if (inWorker && followup) importScripts('/font-followup.js', '/graphics-followup.js');
 
 async function readSafely(action) {
     try {
@@ -270,6 +273,17 @@ async function readRTC() {
 }
 
 async function collectContext() {
+    if (followup) {
+        const [browser, http, fonts, graphics] = await Promise.all([
+            readSafely(readBrowser), readSafely(() => fetchJson('/headers')),
+            readSafely(async () => globalThis.fontFollowup(await fetchJson('/fonts'))),
+            readSafely(() => globalThis.graphicsFollowup()),
+        ]);
+        delete http.testCookiePresent;
+        const readings = {browser, http, fonts, graphics};
+        if (!inWorker) readings.screen = await readSafely(() => globalThis.screenFollowup());
+        return readings;
+    }
     const [browser, http, canvas, audio] = await Promise.all([
         readSafely(readBrowser), readSafely(() => fetchJson('/headers')),
         readSafely(readCanvas), readSafely(readAudio),
@@ -287,7 +301,7 @@ async function collectContext() {
 
 function collectWorker() {
     return new Promise(resolve => {
-        const worker = new Worker(`/probe.js?drawing=${parameters.get('drawing')}`);
+        const worker = new Worker(`/probe.js?drawing=${parameters.get('drawing')}&followup=${Number(followup)}`);
         function finish(value) {
             clearTimeout(deadline);
             worker.terminate();
@@ -360,7 +374,7 @@ async function main() {
             || !['clear', 'shader'].includes(drawing)) {
         throw new Error('无效的采样参数，请从实验设置开始');
     }
-    const framePath = '/frame?drawing=' + drawing;
+    const framePath = `/frame?drawing=${drawing}&followup=${Number(followup)}`;
     const [top, sameFrame, crossFrame, worker, geolocation, rtc, storage] = await Promise.all([
         readSafely(collectContext),
         readSafely(() => collectFrame(new URL(framePath, location.origin))),
